@@ -1,7 +1,12 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import {
+  formatSemanticRulesPrompt,
+  mergeRuleConfigs,
+  parseRuleConfig,
+} from "./rules.js";
 import type { Source } from "./types.js";
 
 const missingPrNumberMessage = "PR number is required for self-merge sentinel";
@@ -105,6 +110,12 @@ export function isUnsupportedForkRepositories(input: RepositoryNames): boolean {
   return input.headRepositoryFullName !== input.baseRepositoryFullName;
 }
 
+function loadMergedRuleConfig(sources: Source[]) {
+  return mergeRuleConfigs(
+    sources.map((source) => parseRuleConfig(readFileSync(source.path, "utf8"))),
+  );
+}
+
 export async function runPrepare(): Promise<void> {
   const actionPath = resolve(process.env.GITHUB_ACTION_PATH ?? ".");
   const prNumber = resolvePrNumber({
@@ -124,6 +135,8 @@ export async function runPrepare(): Promise<void> {
     path,
   }));
   const rulesSources = [rulesSource, ...extraRulesSources];
+  const rules = loadMergedRuleConfig(rulesSources);
+  const semanticRulesPrompt = formatSemanticRulesPrompt(rules);
   const unsupportedFork = await resolveUnsupportedForkPullRequest({ prNumber, token });
   const metadata = {
     prNumber,
@@ -140,10 +153,7 @@ export async function runPrepare(): Promise<void> {
   core.setOutput("pr_number", String(prNumber));
   core.setOutput("unsupported_fork", String(unsupportedFork));
   core.setOutput("rules_path", rulesSource.path);
-  core.setOutput(
-    "rules_paths",
-    rulesSources.map((source) => source.path).join("\n"),
-  );
+  core.setOutput("semantic_rules_prompt", semanticRulesPrompt);
 }
 
 if (isActionEntrypoint("prepare")) {

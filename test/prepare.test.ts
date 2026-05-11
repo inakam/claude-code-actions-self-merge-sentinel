@@ -245,6 +245,56 @@ describe("runPrepare", () => {
     const githubOutput = join(workspace, "github-output");
     const actionPath = join(workspace, "action");
     writeFileSync(githubOutput, "");
+    mkdirSync(join(workspace, ".github"), { recursive: true });
+    mkdirSync(actionPath, { recursive: true });
+    writeFileSync(
+      join(workspace, ".github/self-merge-rules.yml"),
+      `
+version: 1
+description: |
+  base rules
+default_verdict: "HUMAN_REVIEW_REQUIRED"
+review_required_rules:
+  - id: "database-change"
+    description: "DB schema, migration, seed, destructive DDL"
+    match:
+      paths:
+        - "db/**"
+  - id: "auth-or-authorization-change"
+    description: "Authentication, authorization, session, permission, or tenant isolation behavior"
+    match:
+      semantic: true
+`,
+    );
+    writeFileSync(
+      join(workspace, ".github/self-merge-rules.database.yml"),
+      `
+version: 1
+description: |
+  database team rules
+default_verdict: "HUMAN_REVIEW_REQUIRED"
+review_required_rules:
+  - id: "hard-to-rollback-change"
+    description: "Any change where rollback is hard, incomplete, or risky"
+    match:
+      semantic: true
+`,
+    );
+    writeFileSync(
+      join(workspace, ".github/self-merge-rules.security.yml"),
+      `
+version: 1
+description: |
+  security team rules
+default_verdict: "HUMAN_REVIEW_REQUIRED"
+review_required_rules:
+  - id: "security-path-only"
+    description: "Security-owned path"
+    match:
+      paths:
+        - "security/**"
+`,
+    );
     process.chdir(workspace);
     process.env = {
       ...originalEnv,
@@ -296,11 +346,66 @@ describe("runPrepare", () => {
         pr_number: "12",
         unsupported_fork: "true",
         rules_path: ".github/self-merge-rules.yml",
-        rules_paths:
-          ".github/self-merge-rules.yml\n.github/self-merge-rules.database.yml\n.github/self-merge-rules.security.yml",
+        semantic_rules_prompt:
+          "Self-merge rules description:\n" +
+          "base rules\n" +
+          "\n" +
+          "database team rules\n" +
+          "\n" +
+          "security team rules\n" +
+          "\n" +
+          "Semantic review-required rules:\n" +
+          "- auth-or-authorization-change: Authentication, authorization, session, permission, or tenant isolation behavior\n" +
+          "- hard-to-rollback-change: Any change where rollback is hard, incomplete, or risky\n",
       },
     });
 
     rmSync(workspace, { recursive: true, force: true });
+  });
+
+  it("rulesが壊れている場合はprepareを失敗させる", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "prepare-test-"));
+    const githubOutput = join(workspace, "github-output");
+    const actionPath = join(workspace, "action");
+    writeFileSync(githubOutput, "");
+    mkdirSync(join(workspace, ".github"), { recursive: true });
+    writeFileSync(
+      join(workspace, ".github/self-merge-rules.yml"),
+      `
+version: 1
+description: "invalid"
+default_verdict: "HUMAN_REVIEW_REQUIRED"
+review_required_rules:
+  - id: ""
+    description: "empty id"
+    match:
+      semantic: true
+`,
+    );
+    try {
+      process.chdir(workspace);
+      process.env = {
+        ...originalEnv,
+        GITHUB_ACTION_PATH: actionPath,
+        GITHUB_OUTPUT: githubOutput,
+        INPUT_PR_NUMBER: "12",
+        INPUT_RULES_PATH: ".github/self-merge-rules.yml",
+        INPUT_EXTRA_RULES_PATHS: "",
+        INPUT_GITHUB_TOKEN: "github-token",
+      };
+      github.context.payload = {
+        pull_request: {
+          number: 12,
+          head: { repo: { full_name: "owner/repo" } },
+          base: { repo: { full_name: "owner/repo" } },
+        },
+      };
+
+      await expect(runPrepare()).rejects.toThrow(
+        "Invalid self-merge rule config",
+      );
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
   });
 });
