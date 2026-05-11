@@ -1,7 +1,7 @@
 name: 'Self Merge Sentinel'
 description: 'Classify whether a PR can be self-merged or needs human review'
 inputs:
-  api_key:
+  anthropic_api_key:
     description: 'Claude Code Action compatible API key'
     required: true
   github_token:
@@ -98,7 +98,7 @@ runs:
       uses: anthropics/claude-code-action@v1
       continue-on-error: true
       with:
-        anthropic_api_key: ${{ inputs.api_key }}
+        anthropic_api_key: ${{ inputs.anthropic_api_key }}
         prompt: |
           You are classifying whether this PR can be self-merged.
 
