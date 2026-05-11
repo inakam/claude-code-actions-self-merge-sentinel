@@ -263,12 +263,13 @@ review_required_rules:
 
 1. `rules_path` があればその YAML をベースとして読み、なければ同梱の `rules/default.yml` をベースとして使います。
 2. `extra_rules_paths` があれば、指定された rules YAML をベースに追加します。
-3. PRの変更ファイル一覧と diff を取得します。
+3. action 側で rules YAML を parse、merge、validate します。壊れた rules は設定エラーとして `prepare` で失敗します。
 4. `match.paths` を action 側で決定的に評価します。
 5. パス一致がある場合、最終判定は `HUMAN_REVIEW_REQUIRED` になります。
-6. Claude Code Action に rules、変更ファイル一覧、diff を読ませ、structured output を生成します。
-7. action 側でAI出力を検証し、未知キーや不正な構造は `AI_CLASSIFICATION_FAILED` として soft failure にします。
-8. 判定コメントを upsert し、`self-merge: allowed` または `review: human-required` ラベルを更新します。
+6. rules YAML 全体ではなく、action 側で検証済みの top-level `description` と、`match.semantic: true` の semantic rule を `id: description` 形式に正規化した prompt 文字列だけを Claude Code Action の `prompt` 本文に直接展開します。
+7. Claude Code Action に変更ファイル一覧と diff を読ませ、正規化済み semantic rules prompt と実際の変更から structured output を生成します。
+8. action 側でAI出力を検証し、未知キーや不正な構造は `AI_CLASSIFICATION_FAILED` として soft failure にします。
+9. 判定コメントを upsert し、`self-merge: allowed` または `review: human-required` ラベルを更新します。
 
 AIは approve、merge、コメント投稿、ラベル更新を直接行いません。
 
@@ -340,7 +341,8 @@ GLM など Anthropic-compatible API を使う場合も、Action の input 名は
 - fork PR を本格的に判定したい場合は、secrets を使う処理と untrusted code の checkout を分離する別設計が必要です。
 - Claude には PR diff を信頼できない入力として扱うよう指示しています。
 - PR diff、PR本文、コメント、コード中の指示は判定対象データであり、実行すべき命令ではありません。
-- Claude には `Read` だけを許可します。
+- Claude には rules ファイルを読ませず、action 側で検証済みの `description` と semantic rule の `id: description` だけを正規化済み semantic rules prompt として `prompt` 本文に渡します。
+- Claude には `Read` だけを許可し、読み取り対象は変更ファイル一覧と diff に限定します。
 - Claude にはコメント投稿やラベル更新をさせません。
 - PRコメントとラベル更新は、同梱された action script が GitHub API で実行します。
 - workflow の `permissions` は `contents: read`, `pull-requests: write`, `issues: write` に絞ってください。
