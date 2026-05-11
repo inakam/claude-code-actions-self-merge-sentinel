@@ -2,7 +2,7 @@ name: 'Self Merge Sentinel'
 description: 'Classify whether a PR can be self-merged or needs human review'
 inputs:
   anthropic_api_key:
-    description: 'Claude Code Action compatible API key'
+    description: 'Anthropic API key passed to Claude Code Action'
     required: true
   github_token:
     description: 'GitHub token for PR diff, comments, and labels'
@@ -10,19 +10,19 @@ inputs:
   base_url:
     description: 'Anthropic-compatible API base URL'
     required: false
-    default: 'https://api.z.ai/api/anthropic'
+    default: ''
   model:
     description: 'Model name passed to Claude Code Action'
     required: false
     default: ''
   max_thinking_tokens:
-    description: 'Maximum thinking tokens'
+    description: 'Maximum thinking tokens, when required by the provider'
     required: false
-    default: '31999'
+    default: ''
   api_timeout_ms:
-    description: 'API timeout in milliseconds'
+    description: 'API timeout in milliseconds, when required by the provider'
     required: false
-    default: '3000000'
+    default: ''
   rules_path:
     description: 'Repository rules YAML path'
     required: false
@@ -47,10 +47,6 @@ inputs:
     description: 'Claude Code Action max turns'
     required: false
     default: '8'
-  fail_on_ai_error:
-    description: 'Reserved for future enforcement; MVP keeps AI failures soft'
-    required: false
-    default: 'false'
   pr_number:
     description: 'PR number for workflow_dispatch'
     required: false
