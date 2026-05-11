@@ -1,0 +1,58 @@
+version: 1
+
+description: |
+  セルフマージ可否は、その変更が容易にやり直せるかで判断する。
+  判断に迷う場合は人間レビュー必須とする。
+  AIの判定は最終承認ではなく、PR作成者とチームの判断材料である。
+
+default_verdict: "HUMAN_REVIEW_REQUIRED"
+
+review_required_rules:
+  - id: "database-change"
+    description: "DB schema, migration, seed, destructive DDL"
+    match:
+      paths:
+        - "db/**"
+        - "**/schema.sql"
+
+  - id: "auth-or-authorization-change"
+    description: "Authentication, authorization, session, permission, or tenant isolation behavior"
+    match:
+      paths:
+        - "src/**/auth/**"
+        - "app/api/auth/**"
+        - "middleware.ts"
+        - "src/middleware.ts"
+        - "supabase/policies/**"
+        - "**/rls/**"
+      semantic: true
+
+  - id: "infrastructure-or-release-change"
+    description: "Deployment, release, infrastructure, or production runtime behavior"
+    match:
+      paths:
+        - "infra/**"
+        - "terraform/**"
+        - "pulumi/**"
+        - "cdk/**"
+        - ".github/workflows/deploy*.yml"
+        - ".github/workflows/release*.yml"
+        - "vercel.json"
+        - "fly.toml"
+        - "render.yaml"
+      semantic: true
+
+  - id: "foundational-library-change"
+    description: "Adds, replaces, or removes a foundational library or framework"
+    match:
+      semantic: true
+
+  - id: "public-api-contract-change"
+    description: "Changes public API contracts in a way that may affect external clients"
+    match:
+      semantic: true
+
+  - id: "hard-to-rollback-change"
+    description: "Any change where rollback is hard, incomplete, or risky"
+    match:
+      semantic: true
