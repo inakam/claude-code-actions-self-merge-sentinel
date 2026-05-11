@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   findDeterministicMatches,
+  formatSemanticRulesPrompt,
   mergeRuleConfigs,
   parseRuleConfig,
 } from "../src/rules.js";
@@ -253,6 +254,98 @@ review_required_rules:
 
     expect(() => mergeRuleConfigs([base, extra])).toThrow(
       "Duplicate self-merge rule id: duplicate-rule",
+    );
+  });
+});
+
+describe("formatSemanticRulesPrompt", () => {
+  const cases = [
+    {
+      name: "semantic ruleだけをidとdescriptionで出力する",
+      rules: parseRuleConfig(`
+version: 1
+description: |
+  セルフマージ可否は、その変更が容易にやり直せるかで判断する。
+  判断に迷う場合は人間レビュー必須とする。
+default_verdict: "HUMAN_REVIEW_REQUIRED"
+review_required_rules:
+  - id: "database-change"
+    description: "DB schema, migration, seed, destructive DDL"
+    match:
+      paths:
+        - "db/**"
+        - "**/schema.sql"
+  - id: "auth-or-authorization-change"
+    description: "Authentication, authorization, session, permission, or tenant isolation behavior"
+    match:
+      paths:
+        - "src/**/auth/**"
+      semantic: true
+  - id: "foundational-library-change"
+    description: "Adds, replaces, or removes a foundational library or framework"
+    match:
+      semantic: true
+`),
+      expected:
+        "Self-merge rules description:\n" +
+        "セルフマージ可否は、その変更が容易にやり直せるかで判断する。\n" +
+        "判断に迷う場合は人間レビュー必須とする。\n" +
+        "\n" +
+        "Semantic review-required rules:\n" +
+        "- auth-or-authorization-change: Authentication, authorization, session, permission, or tenant isolation behavior\n" +
+        "- foundational-library-change: Adds, replaces, or removes a foundational library or framework\n",
+    },
+    {
+      name: "semantic ruleがない場合は空の一覧として出力する",
+      rules: parseRuleConfig(`
+version: 1
+description: |
+  path only policy
+default_verdict: "HUMAN_REVIEW_REQUIRED"
+review_required_rules:
+  - id: "database-change"
+    description: "DB schema, migration, seed, destructive DDL"
+    match:
+      paths:
+        - "db/**"
+`),
+      expected:
+        "Self-merge rules description:\n" +
+        "path only policy\n" +
+        "\n" +
+        "Semantic review-required rules:\n" +
+        "(none)\n",
+    },
+  ];
+
+  it.each(cases)("$name", ({ rules, expected }) => {
+    const actual = formatSemanticRulesPrompt(rules);
+
+    expect(actual).toEqual(expected);
+  });
+
+  it("path patternsをClaude向けpromptに含めない", () => {
+    const rules = parseRuleConfig(`
+version: 1
+description: "path patterns must stay outside Claude prompt"
+default_verdict: "HUMAN_REVIEW_REQUIRED"
+review_required_rules:
+  - id: "auth-or-authorization-change"
+    description: "Authentication, authorization, session, permission, or tenant isolation behavior"
+    match:
+      paths:
+        - "src/**/auth/**"
+      semantic: true
+`);
+
+    const actual = formatSemanticRulesPrompt(rules);
+
+    expect(actual).toEqual(
+      "Self-merge rules description:\n" +
+        "path patterns must stay outside Claude prompt\n" +
+        "\n" +
+        "Semantic review-required rules:\n" +
+        "- auth-or-authorization-change: Authentication, authorization, session, permission, or tenant isolation behavior\n",
     );
   });
 });

@@ -70,6 +70,26 @@ export function mergeRuleConfigs(configs: RuleConfig[]): RuleConfig {
   };
 }
 
+export function formatSemanticRulesPrompt(rules: RuleConfig): string {
+  const semanticRules = rules.reviewRequiredRules.filter(
+    (rule) => rule.match.semantic === true,
+  );
+  const description = rules.description.trimEnd();
+  const ruleLines =
+    semanticRules.length === 0
+      ? ["(none)"]
+      : semanticRules.map((rule) => `- ${rule.id}: ${rule.description}`);
+
+  return [
+    "Self-merge rules description:",
+    description,
+    "",
+    "Semantic review-required rules:",
+    ...ruleLines,
+    "",
+  ].join("\n");
+}
+
 export function findDeterministicMatches(
   rules: RuleConfig,
   changedFiles: string[],
