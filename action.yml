@@ -2,8 +2,9 @@ name: 'Self Merge Sentinel'
 description: 'Classify whether a PR can be self-merged or needs human review'
 inputs:
   anthropic_api_key:
-    description: 'Anthropic API key passed to Claude Code Action'
-    required: true
+    description: 'Claude Code Action compatible API key'
+    required: false
+    default: ''
   github_token:
     description: 'GitHub token for PR diff, comments, and labels'
     required: true
@@ -11,6 +12,14 @@ inputs:
     description: 'Anthropic-compatible API base URL'
     required: false
     default: ''
+  use_bedrock:
+    description: 'Use Amazon Bedrock with OIDC authentication instead of direct Anthropic API'
+    required: false
+    default: 'false'
+  use_vertex:
+    description: 'Use Google Vertex AI with OIDC authentication instead of direct Anthropic API'
+    required: false
+    default: 'false'
   model:
     description: 'Model name passed to Claude Code Action'
     required: false
@@ -93,8 +102,21 @@ runs:
       id: classify
       uses: anthropics/claude-code-action@v1
       continue-on-error: true
+      env:
+        AWS_REGION: ${{ env.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+        AWS_SESSION_TOKEN: ${{ env.AWS_SESSION_TOKEN }}
+        AWS_BEARER_TOKEN_BEDROCK: ${{ env.AWS_BEARER_TOKEN_BEDROCK }}
+        ANTHROPIC_BEDROCK_BASE_URL: ${{ env.ANTHROPIC_BEDROCK_BASE_URL || (env.AWS_REGION && format('https://bedrock-runtime.{0}.amazonaws.com', env.AWS_REGION)) }}
+        ANTHROPIC_VERTEX_PROJECT_ID: ${{ env.ANTHROPIC_VERTEX_PROJECT_ID }}
+        CLOUD_ML_REGION: ${{ env.CLOUD_ML_REGION }}
+        GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
+        ANTHROPIC_VERTEX_BASE_URL: ${{ env.ANTHROPIC_VERTEX_BASE_URL }}
       with:
         anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        use_bedrock: ${{ inputs.use_bedrock }}
+        use_vertex: ${{ inputs.use_vertex }}
         prompt: |
           You are classifying whether this PR can be self-merged.
 

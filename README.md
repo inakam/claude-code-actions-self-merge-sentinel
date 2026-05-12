@@ -12,11 +12,12 @@ PRごとに「セルフマージ可」か「人間レビュー必須」かを判
 - **決定的ルール優先**: `match.paths` に一致した変更はAI判断に関係なく人間レビュー必須にします。
 - **意味判定もID付きで管理**: `match.semantic: true` のルールはClaudeに判定させ、コメントには該当 `id` を出せます。
 - **標準 Anthropic 構成**: 通常は `ANTHROPIC_API_KEY` だけで Claude Code Action の標準 provider を使えます。
+- **クラウド provider 対応**: Claude Code Action と同じ `use_bedrock` / `use_vertex` と runner の AWS/GCP 認証 env を使えます。
 - **カスタマイズ可能**: Anthropic-compatible API の `base_url`、`model`、timeout、thinking tokens、ラベル名を必要に応じて変更できます。
 
 ## 事前準備
 
-### Anthropic API key を登録する
+### Claude の認証を用意する
 
 この action は内部で `anthropics/claude-code-action@v1` を使います。標準構成では、利用先リポジトリに `ANTHROPIC_API_KEY` を GitHub Actions secret として登録してください。
 
@@ -25,6 +26,8 @@ gh secret set ANTHROPIC_API_KEY --body "your-anthropic-api-key"
 ```
 
 GitHub UI から登録する場合は、利用先リポジトリの `Settings` -> `Secrets and variables` -> `Actions` -> `New repository secret` で `ANTHROPIC_API_KEY` を追加します。
+
+Amazon Bedrock または Google Vertex AI を使う場合は `anthropic_api_key` は不要です。workflow 側で Claude Code Action と同じ OIDC / credential 設定を行い、この action に `use_bedrock: "true"` または `use_vertex: "true"` を渡してください。
 
 ### GITHUB_TOKEN について
 
@@ -290,13 +293,67 @@ GLM など Anthropic-compatible API を使う場合も、Action の input 名は
 
 必要な provider でだけ `model`、`max_thinking_tokens`、`api_timeout_ms` を指定してください。未指定の値は Claude Code Action に渡しません。
 
+## Amazon Bedrock / Google Vertex AI
+
+Claude Code Action の `use_bedrock` / `use_vertex` と同じ認証を、この action でも利用できます。AWS/GCP の認証ステップで設定された env は `Classify with Claude` ステップへ渡されます。
+
+Amazon Bedrock の例:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+steps:
+  - uses: actions/checkout@v5
+  - uses: aws-actions/configure-aws-credentials@v5
+    with:
+      role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+      aws-region: us-west-2
+  - uses: inakam/claude-code-actions-self-merge-sentinel@v1
+    with:
+      use_bedrock: "true"
+      github_token: ${{ secrets.GITHUB_TOKEN }}
+      pr_number: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
+```
+
+Google Vertex AI の例:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+env:
+  ANTHROPIC_VERTEX_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  CLOUD_ML_REGION: us-east5
+
+steps:
+  - uses: actions/checkout@v5
+  - uses: google-github-actions/auth@v3
+    with:
+      workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+  - uses: inakam/claude-code-actions-self-merge-sentinel@v1
+    with:
+      use_vertex: "true"
+      github_token: ${{ secrets.GITHUB_TOKEN }}
+      pr_number: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
+```
+
 ## 入力
 
 | 名前 | 必須 | デフォルト | 説明 |
 | --- | --- | --- | --- |
-| `anthropic_api_key` | yes | | Claude Code Action に渡す Anthropic API key。Anthropic-compatible provider を使う場合もこの input に provider 用 secret を渡します。 |
+| `anthropic_api_key` | no | | Claude Code Action に渡す Anthropic API key。Anthropic-compatible provider を使う場合もこの input に provider 用 secret を渡します。Bedrock/Vertex では不要です。 |
 | `github_token` | yes | | PR diff、コメント、ラベル更新に使う GitHub token。通常は `${{ secrets.GITHUB_TOKEN }}` を渡します。 |
 | `base_url` | no | | Anthropic-compatible API の base URL。空なら Claude Code Action の標準 provider を使います。 |
+| `use_bedrock` | no | `false` | Amazon Bedrock の OIDC 認証を使う場合に `true` を指定します。 |
+| `use_vertex` | no | `false` | Google Vertex AI の OIDC 認証を使う場合に `true` を指定します。 |
 | `model` | no | | Claude Code Action に渡す model 名。空なら Claude Code Action 側の既定値に任せます。 |
 | `max_thinking_tokens` | no | | 最大 thinking tokens。必要な provider でだけ指定します。 |
 | `api_timeout_ms` | no | | API timeout milliseconds。必要な provider でだけ指定します。 |
