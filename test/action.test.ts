@@ -37,6 +37,7 @@ describe("action.yml", () => {
       classifyStep: {
         uses: classifyStep?.uses,
         with: {
+          github_token: classifyStep?.with?.github_token,
           anthropic_api_key: classifyStep?.with?.anthropic_api_key,
           use_bedrock: classifyStep?.with?.use_bedrock,
           use_vertex: classifyStep?.with?.use_vertex,
@@ -73,6 +74,7 @@ describe("action.yml", () => {
       classifyStep: {
         uses: "anthropics/claude-code-action@v1",
         with: {
+          github_token: "${{ inputs.github_token }}",
           anthropic_api_key: "${{ inputs.anthropic_api_key }}",
           use_bedrock: "${{ inputs.use_bedrock }}",
           use_vertex: "${{ inputs.use_vertex }}",
