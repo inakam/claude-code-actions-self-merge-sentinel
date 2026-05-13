@@ -75,10 +75,12 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          pr_number: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
+          pr_number: ${{ github.event.inputs.pr_number }}
 ```
 
 この action は `dist/` に依存込みでバンドル済みの Node.js スクリプトを含むため、利用先の workflow で `npm install` は不要です。
+対象 PR 番号は、`pull_request` イベントや PR への `issue_comment` イベントから自動で解決します。
+`workflow_dispatch` など GitHub イベントから PR を特定できない場合だけ、`pr_number` を明示してください。
 
 ## Rules の考え方
 
@@ -96,7 +98,6 @@ rules YAML は、次の3つを1ファイルにまとめたものです。
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           rules_path: .github/self-merge-rules.yml
-          pr_number: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
 ```
 
 デフォルト rules を維持したままチーム固有の rules を足す場合は、`extra_rules_paths` を改行区切りで指定します。
@@ -109,7 +110,6 @@ rules YAML は、次の3つを1ファイルにまとめたものです。
           extra_rules_paths: |
             .github/self-merge-rules.database.yml
             .github/self-merge-rules.security.yml
-          pr_number: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
 ```
 
 `extra_rules_paths` の各ファイルも、`version`、`description`、`default_verdict`、`review_required_rules` を持つ完全な rules YAML である必要があります。
@@ -288,7 +288,6 @@ GLM など Anthropic-compatible API を使う場合も、Action の input 名は
     anthropic_api_key: ${{ secrets.GLM_API_KEY }}
     base_url: https://api.z.ai/api/anthropic
     github_token: ${{ secrets.GITHUB_TOKEN }}
-    pr_number: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
 ```
 
 必要な provider でだけ `model`、`max_thinking_tokens`、`api_timeout_ms` を指定してください。未指定の値は Claude Code Action に渡しません。
@@ -316,7 +315,6 @@ steps:
     with:
       use_bedrock: "true"
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      pr_number: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
 ```
 
 Google Vertex AI の例:
@@ -342,7 +340,6 @@ steps:
     with:
       use_vertex: "true"
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      pr_number: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
 ```
 
 ## 入力
@@ -363,7 +360,7 @@ steps:
 | `human_required_label` | no | `review: human-required` | 人間レビュー必須 PR に付けるラベル。 |
 | `comment_marker` | no | `<!-- self-merge-sentinel -->` | PRコメントを更新するための marker。 |
 | `max_turns` | no | `8` | Claude Code Action の max turns。 |
-| `pr_number` | no | | `workflow_dispatch` など手動実行で判定する PR 番号。 |
+| `pr_number` | no | | GitHub イベントから PR を特定できない場合に明示する PR 番号。通常の `pull_request` や PR への `issue_comment` では自動解決します。 |
 
 ## 出力
 

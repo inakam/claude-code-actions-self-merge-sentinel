@@ -23942,6 +23942,7 @@ __export(prepare_exports, {
   isUnsupportedForkRepositories: () => isUnsupportedForkRepositories,
   parseExtraRulesPaths: () => parseExtraRulesPaths,
   resolvePrNumber: () => resolvePrNumber,
+  resolvePullRequestContext: () => resolvePullRequestContext,
   resolveSource: () => resolveSource,
   resolveUnsupportedForkPullRequest: () => resolveUnsupportedForkPullRequest,
   runPrepare: () => runPrepare
@@ -26707,18 +26708,44 @@ function isNonEmptyStringArray(value) {
 // src/prepare.ts
 var missingPrNumberMessage = "PR number is required for self-merge sentinel";
 function resolvePrNumber(input) {
+  const context2 = resolvePullRequestContext({
+    ...input,
+    eventIssueNumber: void 0,
+    eventIssueIsPullRequest: false
+  });
+  if (context2.isPullRequest) {
+    return context2.prNumber;
+  }
+  throw new Error(missingPrNumberMessage);
+}
+function resolvePullRequestContext(input) {
   const explicit = input.explicit.trim();
   if (explicit !== "") {
     const prNumber = Number(explicit);
     if (isValidPrNumber(prNumber)) {
-      return prNumber;
+      return {
+        isPullRequest: true,
+        prNumber
+      };
     }
     throw new Error(missingPrNumberMessage);
   }
   if (isValidPrNumber(input.eventPullRequestNumber)) {
-    return input.eventPullRequestNumber;
+    return {
+      isPullRequest: true,
+      prNumber: input.eventPullRequestNumber
+    };
   }
-  throw new Error(missingPrNumberMessage);
+  if (input.eventIssueIsPullRequest && isValidPrNumber(input.eventIssueNumber)) {
+    return {
+      isPullRequest: true,
+      prNumber: input.eventIssueNumber
+    };
+  }
+  return {
+    isPullRequest: false,
+    prNumber: null
+  };
 }
 function resolveSource(input) {
   const repositoryPath = input.repositoryPath.trim();
@@ -26772,10 +26799,20 @@ function loadMergedRuleConfig(sources) {
 }
 async function runPrepare() {
   const actionPath = (0, import_node_path.resolve)(process.env.GITHUB_ACTION_PATH ?? ".");
-  const prNumber = resolvePrNumber({
+  const pullRequestContext = resolvePullRequestContext({
     explicit: core2.getInput("pr_number"),
-    eventPullRequestNumber: github.context.payload.pull_request?.number
+    eventPullRequestNumber: github.context.payload.pull_request?.number,
+    eventIssueNumber: github.context.payload.issue?.number,
+    eventIssueIsPullRequest: Boolean(github.context.payload.issue?.pull_request)
   });
+  if (!pullRequestContext.isPullRequest) {
+    (0, import_node_fs.mkdirSync)(".self-merge-sentinel", { recursive: true });
+    core2.setOutput("is_pull_request", "false");
+    core2.setOutput("pr_number", "");
+    core2.setOutput("unsupported_fork", "false");
+    return;
+  }
+  const prNumber = pullRequestContext.prNumber;
   const token = core2.getInput("github_token", { required: true });
   const rulesSource = resolveSource({
     repositoryPath: core2.getInput("rules_path"),
@@ -26802,6 +26839,7 @@ async function runPrepare() {
     ".self-merge-sentinel/metadata.json",
     JSON.stringify(metadata, null, 2)
   );
+  core2.setOutput("is_pull_request", "true");
   core2.setOutput("pr_number", String(prNumber));
   core2.setOutput("unsupported_fork", String(unsupportedFork));
   core2.setOutput("rules_path", rulesSource.path);
@@ -26837,6 +26875,7 @@ async function fetchPullRequestRepositoryNames(input) {
   isUnsupportedForkRepositories,
   parseExtraRulesPaths,
   resolvePrNumber,
+  resolvePullRequestContext,
   resolveSource,
   resolveUnsupportedForkPullRequest,
   runPrepare
