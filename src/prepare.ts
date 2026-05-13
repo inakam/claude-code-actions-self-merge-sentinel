@@ -21,25 +21,73 @@ type FetchRepositoryNames = (input: {
   prNumber: number;
 }) => Promise<RepositoryNames>;
 
+type PullRequestContext =
+  | {
+      isPullRequest: true;
+      prNumber: number;
+    }
+  | {
+      isPullRequest: false;
+      prNumber: null;
+    };
+
 export function resolvePrNumber(input: {
   explicit: string;
   eventPullRequestNumber: number | undefined;
 }): number {
+  const context = resolvePullRequestContext({
+    ...input,
+    eventIssueNumber: undefined,
+    eventIssueIsPullRequest: false,
+  });
+
+  if (context.isPullRequest) {
+    return context.prNumber;
+  }
+
+  throw new Error(missingPrNumberMessage);
+}
+
+export function resolvePullRequestContext(input: {
+  explicit: string;
+  eventPullRequestNumber: number | undefined;
+  eventIssueNumber: number | undefined;
+  eventIssueIsPullRequest: boolean;
+}): PullRequestContext {
   const explicit = input.explicit.trim();
   if (explicit !== "") {
     const prNumber = Number(explicit);
     if (isValidPrNumber(prNumber)) {
-      return prNumber;
+      return {
+        isPullRequest: true,
+        prNumber,
+      };
     }
 
     throw new Error(missingPrNumberMessage);
   }
 
   if (isValidPrNumber(input.eventPullRequestNumber)) {
-    return input.eventPullRequestNumber;
+    return {
+      isPullRequest: true,
+      prNumber: input.eventPullRequestNumber,
+    };
   }
 
-  throw new Error(missingPrNumberMessage);
+  if (
+    input.eventIssueIsPullRequest &&
+    isValidPrNumber(input.eventIssueNumber)
+  ) {
+    return {
+      isPullRequest: true,
+      prNumber: input.eventIssueNumber,
+    };
+  }
+
+  return {
+    isPullRequest: false,
+    prNumber: null,
+  };
 }
 
 export function resolveSource(input: {
@@ -118,10 +166,22 @@ function loadMergedRuleConfig(sources: Source[]) {
 
 export async function runPrepare(): Promise<void> {
   const actionPath = resolve(process.env.GITHUB_ACTION_PATH ?? ".");
-  const prNumber = resolvePrNumber({
+  const pullRequestContext = resolvePullRequestContext({
     explicit: core.getInput("pr_number"),
     eventPullRequestNumber: github.context.payload.pull_request?.number,
+    eventIssueNumber: github.context.payload.issue?.number,
+    eventIssueIsPullRequest: Boolean(github.context.payload.issue?.pull_request),
   });
+
+  if (!pullRequestContext.isPullRequest) {
+    mkdirSync(".self-merge-sentinel", { recursive: true });
+    core.setOutput("is_pull_request", "false");
+    core.setOutput("pr_number", "");
+    core.setOutput("unsupported_fork", "false");
+    return;
+  }
+
+  const prNumber = pullRequestContext.prNumber;
   const token = core.getInput("github_token", { required: true });
 
   const rulesSource = resolveSource({
@@ -150,6 +210,7 @@ export async function runPrepare(): Promise<void> {
     ".self-merge-sentinel/metadata.json",
     JSON.stringify(metadata, null, 2),
   );
+  core.setOutput("is_pull_request", "true");
   core.setOutput("pr_number", String(prNumber));
   core.setOutput("unsupported_fork", String(unsupportedFork));
   core.setOutput("rules_path", rulesSource.path);

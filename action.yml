@@ -57,7 +57,7 @@ inputs:
     required: false
     default: '8'
   pr_number:
-    description: 'PR number for workflow_dispatch'
+    description: 'PR number override when the GitHub event does not identify a PR'
     required: false
     default: ''
 outputs:
@@ -88,7 +88,7 @@ runs:
       run: node "${{ github.action_path }}/dist/prepare.cjs"
 
     - name: Collect PR diff
-      if: steps.prepare.outputs.unsupported_fork != 'true'
+      if: steps.prepare.outputs.is_pull_request == 'true' && steps.prepare.outputs.unsupported_fork != 'true'
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github_token }}
@@ -98,7 +98,7 @@ runs:
         gh pr diff "$PR_NUMBER" > .self-merge-sentinel/pr.diff
 
     - name: Classify with Claude
-      if: steps.prepare.outputs.unsupported_fork != 'true'
+      if: steps.prepare.outputs.is_pull_request == 'true' && steps.prepare.outputs.unsupported_fork != 'true'
       id: classify
       uses: anthropics/claude-code-action@v1
       continue-on-error: true
@@ -154,7 +154,7 @@ runs:
           --json-schema '{"type":"object","additionalProperties":false,"properties":{"verdict":{"type":"string","enum":["SELF_MERGE_ALLOWED","HUMAN_REVIEW_REQUIRED"]},"summary":{"type":"string"},"triggered_rules":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"rule_id":{"type":"string"},"reason":{"type":"string"},"files":{"type":"array","items":{"type":"string"}}},"required":["rule_id","reason","files"]}},"safe_to_self_merge_reason":{"type":"string"},"human_review_reason":{"type":"string"},"files_considered":{"type":"array","items":{"type":"string"}}},"required":["verdict","summary","triggered_rules","files_considered"]}'
 
     - name: Persist Claude result
-      if: steps.prepare.outputs.unsupported_fork != 'true'
+      if: steps.prepare.outputs.is_pull_request == 'true' && steps.prepare.outputs.unsupported_fork != 'true'
       shell: bash
       env:
         STRUCTURED_OUTPUT: ${{ steps.classify.outputs.structured_output }}
@@ -166,6 +166,7 @@ runs:
         fi
 
     - name: Finalize comment and labels
+      if: steps.prepare.outputs.is_pull_request == 'true'
       id: finalize
       shell: bash
       env:

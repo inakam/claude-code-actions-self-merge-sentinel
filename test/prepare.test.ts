@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   isUnsupportedForkPullRequest,
   parseExtraRulesPaths,
+  resolvePullRequestContext,
   resolveUnsupportedForkPullRequest,
   resolvePrNumber,
   resolveSource,
@@ -81,6 +82,61 @@ describe("resolvePrNumber", () => {
     expect(() => resolvePrNumber({ explicit, eventPullRequestNumber })).toThrow(
       "PR number is required for self-merge sentinel",
     );
+  });
+});
+
+describe("resolvePullRequestContext", () => {
+  const cases = [
+    {
+      name: "明示inputを優先する",
+      explicit: "42",
+      eventPullRequestNumber: 7,
+      eventIssueNumber: 8,
+      eventIssueIsPullRequest: true,
+      expected: {
+        isPullRequest: true,
+        prNumber: 42,
+      },
+    },
+    {
+      name: "pull_request payloadを使う",
+      explicit: "",
+      eventPullRequestNumber: 7,
+      eventIssueNumber: undefined,
+      eventIssueIsPullRequest: false,
+      expected: {
+        isPullRequest: true,
+        prNumber: 7,
+      },
+    },
+    {
+      name: "PRへのissue_commentならissue番号をPR番号として使う",
+      explicit: "",
+      eventPullRequestNumber: undefined,
+      eventIssueNumber: 8,
+      eventIssueIsPullRequest: true,
+      expected: {
+        isPullRequest: true,
+        prNumber: 8,
+      },
+    },
+    {
+      name: "通常issueならPR文脈ではない",
+      explicit: "",
+      eventPullRequestNumber: undefined,
+      eventIssueNumber: 8,
+      eventIssueIsPullRequest: false,
+      expected: {
+        isPullRequest: false,
+        prNumber: null,
+      },
+    },
+  ];
+
+  it.each(cases)("$name", (testCase) => {
+    const actual = resolvePullRequestContext(testCase);
+
+    expect(actual).toEqual(testCase.expected);
   });
 });
 
@@ -343,6 +399,7 @@ review_required_rules:
         ],
       },
       outputs: {
+        is_pull_request: "true",
         pr_number: "12",
         unsupported_fork: "true",
         rules_path: ".github/self-merge-rules.yml",
@@ -361,6 +418,45 @@ review_required_rules:
     });
 
     rmSync(workspace, { recursive: true, force: true });
+  });
+
+  it("通常issueではPR判定をスキップするoutputsを出力する", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "prepare-test-"));
+    const githubOutput = join(workspace, "github-output");
+    writeFileSync(githubOutput, "");
+
+    try {
+      process.chdir(workspace);
+      process.env = {
+        ...originalEnv,
+        GITHUB_OUTPUT: githubOutput,
+        INPUT_PR_NUMBER: "",
+        INPUT_RULES_PATH: "",
+        INPUT_EXTRA_RULES_PATHS: "",
+        INPUT_GITHUB_TOKEN: "github-token",
+      };
+      github.context.payload = {
+        issue: {
+          number: 12,
+        },
+      };
+
+      await runPrepare();
+
+      const actual = {
+        outputs: parseGithubOutput(readFileSync(githubOutput, "utf8")),
+      };
+
+      expect(actual).toEqual({
+        outputs: {
+          is_pull_request: "false",
+          pr_number: "",
+          unsupported_fork: "false",
+        },
+      });
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
   });
 
   it("rulesが壊れている場合はprepareを失敗させる", async () => {
