@@ -409,8 +409,6 @@ steps:
 - tagpr のリリース PR をマージすると、`package.json` と `package-lock.json` の version に対応する `vX.Y.Z` タグと GitHub Release が作成されます。
 - tagpr がタグを作成した時だけ、`haya14busa/action-update-semver@v1` で `v1` タグを同じコミットへ更新します。
 
-GitHub Actions から tagpr のリリース PR を作成できるように、リポジトリの `Settings` -> `Actions` -> `General` で `Allow GitHub Actions to create and approve pull requests` を有効にしてください。
-
 ## 開発
 
 このリポジトリを開発する場合:
