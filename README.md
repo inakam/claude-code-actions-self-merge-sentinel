@@ -401,6 +401,14 @@ steps:
 - PRコメントとラベル更新は、同梱された action script が GitHub API で実行します。
 - workflow の `permissions` は `contents: read`, `pull-requests: write`, `issues: write` に絞ってください。
 
+## リリース
+
+このリポジトリのリリースは tagpr で管理します。
+
+- `main` に変更が入ると、tagpr が次リリース用の PR を作成または更新します。
+- tagpr のリリース PR をマージすると、`package.json` と `package-lock.json` の version に対応する `vX.Y.Z` タグと GitHub Release が作成されます。
+- tagpr がタグを作成した時だけ、`haya14busa/action-update-semver@v1` で `v1` タグを同じコミットへ更新します。
+
 ## 開発
 
 このリポジトリを開発する場合:
