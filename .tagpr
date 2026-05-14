@@ -1,0 +1,5 @@
+[tagpr]
+	vPrefix = true
+	releaseBranch = main
+	versionFile = package.json,package-lock.json
+	changelog = true
