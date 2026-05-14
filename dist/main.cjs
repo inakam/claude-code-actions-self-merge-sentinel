@@ -25718,6 +25718,23 @@ ${details}
 </details>
 `;
 }
+function appendSubsequentFailureDetails(existingBody, result) {
+  const failureDetails = renderSubsequentFailureDetails(result);
+  const detailsEnd = existingBody.lastIndexOf("</details>");
+  if (detailsEnd === -1) {
+    return `${existingBody.trimEnd()}
+
+${failureDetails}
+`;
+  }
+  const beforeDetailsEnd = existingBody.slice(0, detailsEnd).trimEnd();
+  const afterDetailsEnd = existingBody.slice(detailsEnd);
+  return `${beforeDetailsEnd}
+
+${failureDetails}
+
+${afterDetailsEnd}`;
+}
 function titleFor(verdict) {
   switch (verdict) {
     case "SELF_MERGE_ALLOWED":
@@ -25729,6 +25746,15 @@ function titleFor(verdict) {
     case "SKIPPED_UNSUPPORTED_FORK":
       return "\u5BFE\u8C61\u5916";
   }
+}
+function renderSubsequentFailureDetails(result) {
+  const errorCode = result.error?.code ?? "UNKNOWN_ERROR";
+  const errorMessage2 = result.error?.message ?? result.summary;
+  return [
+    "### \u5F8C\u7D9A\u5B9F\u884C\u306E\u5931\u6557",
+    "",
+    `- ${inlineCode(errorCode)}: ${escapeMarkdownText(errorMessage2)}`
+  ].join("\n");
 }
 function renderDetails(result) {
   const lines = [
@@ -25790,8 +25816,8 @@ function longestBacktickRun(value) {
 
 // src/github.ts
 var github = __toESM(require_github(), 1);
-function findExistingCommentId(comments, marker) {
-  return comments.find((comment) => comment.body?.includes(marker))?.id ?? null;
+function findExistingComment(comments, marker) {
+  return comments.find((comment) => comment.body?.includes(marker)) ?? null;
 }
 function labelOperations(plan) {
   if (!plan.shouldUpdate) {
@@ -25811,13 +25837,14 @@ async function upsertComment(input) {
     issue_number: input.issueNumber,
     per_page: 100
   });
-  const existingCommentId = findExistingCommentId(comments.data, input.marker);
-  if (existingCommentId !== null) {
+  const existingComment = findExistingComment(comments.data, input.marker);
+  if (existingComment !== null) {
+    const body = input.bodyForExistingComment && existingComment.body !== void 0 ? input.bodyForExistingComment(existingComment.body ?? "") : input.body;
     const updated = await octokit.rest.issues.updateComment({
       owner: input.owner,
       repo: input.repo,
-      comment_id: existingCommentId,
-      body: input.body
+      comment_id: existingComment.id,
+      body
     });
     return updated.data.html_url;
   }
@@ -28841,6 +28868,7 @@ async function runMain() {
   };
   const result = metadata.unsupportedFork ? skippedForkResult(metadata) : buildFinalResult({ metadata, labels });
   const commentBody = renderComment(result, marker);
+  const bodyForExistingComment = result.verdict === "AI_CLASSIFICATION_FAILED" ? (existingBody) => appendSubsequentFailureDetails(existingBody, result) : void 0;
   const commentUrl = await tryUpsertComment({
     upsert: () => upsertComment({
       token,
@@ -28848,7 +28876,8 @@ async function runMain() {
       repo: github2.context.repo.repo,
       issueNumber: metadata.prNumber,
       marker,
-      body: commentBody
+      body: commentBody,
+      ...bodyForExistingComment ? { bodyForExistingComment } : {}
     }),
     warn: (message) => {
       core2.warning(message);
