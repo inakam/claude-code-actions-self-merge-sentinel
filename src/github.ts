@@ -15,7 +15,14 @@ export function findExistingCommentId(
   comments: ExistingComment[],
   marker: string,
 ): number | null {
-  return comments.find((comment) => comment.body?.includes(marker))?.id ?? null;
+  return findExistingComment(comments, marker)?.id ?? null;
+}
+
+export function findExistingComment(
+  comments: ExistingComment[],
+  marker: string,
+): ExistingComment | null {
+  return comments.find((comment) => comment.body?.includes(marker)) ?? null;
 }
 
 export function labelOperations(plan: LabelUpdatePlan): LabelOperation[] {
@@ -37,6 +44,7 @@ export async function upsertComment(input: {
   issueNumber: number;
   marker: string;
   body: string;
+  bodyForExistingComment?: (existingBody: string) => string;
 }): Promise<string> {
   const octokit = github.getOctokit(input.token);
   const comments = await octokit.rest.issues.listComments({
@@ -45,14 +53,18 @@ export async function upsertComment(input: {
     issue_number: input.issueNumber,
     per_page: 100,
   });
-  const existingCommentId = findExistingCommentId(comments.data, input.marker);
+  const existingComment = findExistingComment(comments.data, input.marker);
 
-  if (existingCommentId !== null) {
+  if (existingComment !== null) {
+    const body =
+      input.bodyForExistingComment && existingComment.body !== undefined
+        ? input.bodyForExistingComment(existingComment.body ?? "")
+        : input.body;
     const updated = await octokit.rest.issues.updateComment({
       owner: input.owner,
       repo: input.repo,
-      comment_id: existingCommentId,
-      body: input.body,
+      comment_id: existingComment.id,
+      body,
     });
 
     return updated.data.html_url;

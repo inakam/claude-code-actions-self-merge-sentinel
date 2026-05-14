@@ -23,6 +23,23 @@ ${details}
 `;
 }
 
+export function appendSubsequentFailureDetails(
+  existingBody: string,
+  result: FinalResult,
+): string {
+  const failureDetails = renderSubsequentFailureDetails(result);
+  const detailsEnd = existingBody.lastIndexOf("</details>");
+
+  if (detailsEnd === -1) {
+    return `${existingBody.trimEnd()}\n\n${failureDetails}\n`;
+  }
+
+  const beforeDetailsEnd = existingBody.slice(0, detailsEnd).trimEnd();
+  const afterDetailsEnd = existingBody.slice(detailsEnd);
+
+  return `${beforeDetailsEnd}\n\n${failureDetails}\n\n${afterDetailsEnd}`;
+}
+
 function titleFor(verdict: FinalResult["verdict"]): string {
   switch (verdict) {
     case "SELF_MERGE_ALLOWED":
@@ -34,6 +51,17 @@ function titleFor(verdict: FinalResult["verdict"]): string {
     case "SKIPPED_UNSUPPORTED_FORK":
       return "対象外";
   }
+}
+
+function renderSubsequentFailureDetails(result: FinalResult): string {
+  const errorCode = result.error?.code ?? "UNKNOWN_ERROR";
+  const errorMessage = result.error?.message ?? result.summary;
+
+  return [
+    "### 後続実行の失敗",
+    "",
+    `- ${inlineCode(errorCode)}: ${escapeMarkdownText(errorMessage)}`,
+  ].join("\n");
 }
 
 function renderDetails(result: FinalResult): string {

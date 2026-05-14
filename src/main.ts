@@ -1,7 +1,7 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { readFileSync, writeFileSync } from "node:fs";
-import { renderComment } from "./comment.js";
+import { appendSubsequentFailureDetails, renderComment } from "./comment.js";
 import { applyLabels, upsertComment } from "./github.js";
 import { labelUpdateForVerdict } from "./labels.js";
 import { finalizeResult, invalidRuleConfigResult } from "./result.js";
@@ -57,6 +57,10 @@ export async function runMain(): Promise<void> {
     ? skippedForkResult(metadata)
     : buildFinalResult({ metadata, labels });
   const commentBody = renderComment(result, marker);
+  const bodyForExistingComment =
+    result.verdict === "AI_CLASSIFICATION_FAILED"
+      ? (existingBody: string) => appendSubsequentFailureDetails(existingBody, result)
+      : undefined;
   const commentUrl = await tryUpsertComment({
     upsert: () =>
       upsertComment({
@@ -66,6 +70,7 @@ export async function runMain(): Promise<void> {
         issueNumber: metadata.prNumber,
         marker,
         body: commentBody,
+        ...(bodyForExistingComment ? { bodyForExistingComment } : {}),
       }),
     warn: (message) => {
       core.warning(message);
