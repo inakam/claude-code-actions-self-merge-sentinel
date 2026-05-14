@@ -656,6 +656,134 @@ UI文言のみの変更です。
       removedLabels: [],
     });
   });
+
+  it("既存判定コメントが判定失敗でもAI判定成功時は成功コメントへ置き換える", async () => {
+    temporaryDirectory = mkdtempSync(join(tmpdir(), "self-merge-sentinel-main-"));
+    process.chdir(temporaryDirectory);
+    mkdirSync(".self-merge-sentinel");
+    mkdirSync("rules");
+    writeFileSync(
+      ".self-merge-sentinel/metadata.json",
+      JSON.stringify({
+        prNumber: 79,
+        unsupportedFork: false,
+        rulesSource: { kind: "action-default", path: "rules/default.yml" },
+      }),
+    );
+    writeFileSync(".self-merge-sentinel/changed-files.txt", "src/index.ts\n");
+    writeFileSync(
+      ".self-merge-sentinel/ai-result.json",
+      JSON.stringify({
+        verdict: "SELF_MERGE_ALLOWED",
+        summary: "UI文言のみの変更です。",
+        triggered_rules: [],
+        files_considered: ["src/index.ts"],
+      }),
+    );
+    writeFileSync(
+      "rules/default.yml",
+      `version: 1
+description: "迷う場合は人間レビュー必須です。"
+default_verdict: "HUMAN_REVIEW_REQUIRED"
+review_required_rules:
+  - id: "hard-to-rollback-change"
+    description: "rollback が難しい変更"
+    match:
+      semantic: true
+`,
+    );
+    actionState.existingComments = [
+      {
+        id: 402,
+        body: `<!-- self-merge-sentinel -->
+
+## セルフマージ判定: 判定失敗
+
+AI判定に失敗したため、この自動判定だけではセルフマージ可否を判断できません。
+
+**判定:** \`AI_CLASSIFICATION_FAILED\`
+
+ラベルは更新していません。
+
+<details>
+<summary>判定の詳細</summary>
+
+### Rules設定
+
+- source: \`action-default:rules/default.yml\`
+
+### エラー
+
+- \`INVALID_AI_OUTPUT\`: Claude structured output does not match the expected schema
+
+</details>
+`,
+      },
+    ];
+
+    await runMain();
+
+    const actual = JSON.parse(
+      readFileSync(".self-merge-sentinel/result.json", "utf8"),
+    ) as unknown;
+
+    expect({
+      result: actual,
+      createdComments: actionState.comments,
+      updatedComments: actionState.updatedComments,
+      labels: actionState.labels,
+      removedLabels: actionState.removedLabels,
+    }).toEqual({
+      result: {
+        verdict: "SELF_MERGE_ALLOWED",
+        aiVerdict: "SELF_MERGE_ALLOWED",
+        summary: "UI文言のみの変更です。",
+        deterministicMatches: [],
+        aiTriggeredRules: [],
+        rulesSource: { kind: "action-default", path: "rules/default.yml" },
+        filesConsidered: ["src/index.ts"],
+        labelUpdate: {
+          shouldUpdate: true,
+          addLabel: "self-merge: allowed",
+          removeLabel: "review: human-required",
+        },
+        commentUrl: "https://github.example/comment/1",
+      },
+      createdComments: [],
+      updatedComments: [
+        {
+          commentId: 402,
+          body: `<!-- self-merge-sentinel -->
+
+## セルフマージ判定: セルフマージ可
+
+UI文言のみの変更です。
+
+**判定:** \`SELF_MERGE_ALLOWED\`
+
+<details>
+<summary>判定の詳細</summary>
+
+### Rules設定
+
+- source: \`action-default:rules/default.yml\`
+
+### AI判定
+
+- \`SELF_MERGE_ALLOWED\`
+
+### 考慮したファイル
+
+- \`src/index.ts\`
+
+</details>
+`,
+        },
+      ],
+      labels: [{ issueNumber: 79, labels: ["self-merge: allowed"] }],
+      removedLabels: [{ issueNumber: 79, name: "review: human-required" }],
+    });
+  });
 });
 
 describe("parseChangedFiles", () => {
