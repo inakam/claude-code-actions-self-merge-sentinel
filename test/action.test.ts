@@ -33,6 +33,7 @@ describe("action.yml", () => {
         use_bedrock: action.inputs.use_bedrock,
         use_vertex: action.inputs.use_vertex,
         base_url: action.inputs.base_url,
+        model: action.inputs.model,
       },
       classifyStep: {
         uses: classifyStep?.uses,
@@ -70,9 +71,15 @@ describe("action.yml", () => {
           required: false,
           default: "",
         },
+        model: {
+          description: "Model name passed to Claude Code Action",
+          required: false,
+          default: "claude-sonnet-4-6",
+        },
       },
       classifyStep: {
-        uses: "anthropics/claude-code-action@v1",
+        uses:
+          "anthropics/claude-code-action@51ea8ea73a139f2a74ff649e3092c25a904aed7e",
         with: {
           github_token: "${{ inputs.github_token }}",
           anthropic_api_key: "${{ inputs.anthropic_api_key }}",

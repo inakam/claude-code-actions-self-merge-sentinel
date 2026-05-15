@@ -23,7 +23,7 @@ inputs:
   model:
     description: 'Model name passed to Claude Code Action'
     required: false
-    default: ''
+    default: 'claude-sonnet-4-6'
   max_thinking_tokens:
     description: 'Maximum thinking tokens, when required by the provider'
     required: false
@@ -100,7 +100,7 @@ runs:
     - name: Classify with Claude
       if: steps.prepare.outputs.is_pull_request == 'true' && steps.prepare.outputs.unsupported_fork != 'true'
       id: classify
-      uses: anthropics/claude-code-action@v1
+      uses: anthropics/claude-code-action@51ea8ea73a139f2a74ff649e3092c25a904aed7e
       continue-on-error: true
       env:
         AWS_REGION: ${{ env.AWS_REGION }}
