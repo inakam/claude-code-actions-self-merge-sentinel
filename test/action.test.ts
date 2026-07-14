@@ -40,6 +40,7 @@ describe("action.yml", () => {
         uses: classifyStep?.uses,
         with: {
           github_token: classifyStep?.with?.github_token,
+          allowed_bots: classifyStep?.with?.allowed_bots,
           anthropic_api_key: classifyStep?.with?.anthropic_api_key,
           use_bedrock: classifyStep?.with?.use_bedrock,
           use_vertex: classifyStep?.with?.use_vertex,
@@ -87,6 +88,7 @@ describe("action.yml", () => {
           "anthropics/claude-code-action@51ea8ea73a139f2a74ff649e3092c25a904aed7e",
         with: {
           github_token: "${{ inputs.github_token }}",
+          allowed_bots: "*",
           anthropic_api_key: "${{ inputs.anthropic_api_key }}",
           use_bedrock: "${{ inputs.use_bedrock }}",
           use_vertex: "${{ inputs.use_vertex }}",
