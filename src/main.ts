@@ -2,7 +2,7 @@ import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { readFileSync, writeFileSync } from "node:fs";
 import { appendSubsequentFailureDetails, renderComment } from "./comment.js";
-import { applyLabels, upsertComment } from "./github.js";
+import { applyLabels, approvePullRequest, upsertComment } from "./github.js";
 import { labelUpdateForVerdict } from "./labels.js";
 import { finalizeResult, invalidRuleConfigResult } from "./result.js";
 import {
@@ -56,6 +56,16 @@ export async function runMain(): Promise<void> {
   const result = metadata.unsupportedFork
     ? skippedForkResult(metadata)
     : buildFinalResult({ metadata, labels });
+
+  if (result.verdict === "SELF_MERGE_ALLOWED") {
+    await approvePullRequest({
+      token,
+      owner: github.context.repo.owner,
+      repo: github.context.repo.repo,
+      pullNumber: metadata.prNumber,
+    });
+  }
+
   const commentBody = renderComment(result, marker);
   const bodyForExistingComment =
     result.verdict === "AI_CLASSIFICATION_FAILED"
