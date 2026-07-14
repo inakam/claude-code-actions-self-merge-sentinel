@@ -80,6 +80,22 @@ export async function upsertComment(input: {
   return created.data.html_url;
 }
 
+export async function approvePullRequest(input: {
+  token: string;
+  owner: string;
+  repo: string;
+  pullNumber: number;
+}): Promise<void> {
+  const octokit = github.getOctokit(input.token);
+
+  await octokit.rest.pulls.createReview({
+    owner: input.owner,
+    repo: input.repo,
+    pull_number: input.pullNumber,
+    event: "APPROVE",
+  });
+}
+
 export async function applyLabels(input: {
   token: string;
   owner: string;

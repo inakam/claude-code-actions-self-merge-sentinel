@@ -25856,6 +25856,15 @@ async function upsertComment(input) {
   });
   return created.data.html_url;
 }
+async function approvePullRequest(input) {
+  const octokit = github.getOctokit(input.token);
+  await octokit.rest.pulls.createReview({
+    owner: input.owner,
+    repo: input.repo,
+    pull_number: input.pullNumber,
+    event: "APPROVE"
+  });
+}
 async function applyLabels(input) {
   const octokit = github.getOctokit(input.token);
   for (const operation of labelOperations(input.plan)) {
@@ -28867,6 +28876,14 @@ async function runMain() {
     humanRequired: core2.getInput("human_required_label") || defaultLabels.humanRequired
   };
   const result = metadata.unsupportedFork ? skippedForkResult(metadata) : buildFinalResult({ metadata, labels });
+  if (result.verdict === "SELF_MERGE_ALLOWED") {
+    await approvePullRequest({
+      token,
+      owner: github2.context.repo.owner,
+      repo: github2.context.repo.repo,
+      pullNumber: metadata.prNumber
+    });
+  }
   const commentBody = renderComment(result, marker);
   const bodyForExistingComment = result.verdict === "AI_CLASSIFICATION_FAILED" ? (existingBody) => appendSubsequentFailureDetails(existingBody, result) : void 0;
   const commentUrl = await tryUpsertComment({

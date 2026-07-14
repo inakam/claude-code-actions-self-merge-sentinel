@@ -1,4 +1,11 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -16,6 +23,13 @@ const actionState = vi.hoisted(() => ({
   updatedComments: [] as { commentId: number; body: string }[],
   labels: [] as { issueNumber: number; labels: string[] }[],
   removedLabels: [] as { issueNumber: number; name: string }[],
+  reviews: [] as {
+    owner: string;
+    repo: string;
+    pull_number: number;
+    event: "APPROVE";
+  }[],
+  reviewError: null as Error | null,
 }));
 
 vi.mock("@actions/core", () => ({
@@ -45,6 +59,24 @@ vi.mock("@actions/github", () => ({
   },
   getOctokit: vi.fn(() => ({
     rest: {
+      pulls: {
+        createReview: vi.fn(
+          async (input: {
+            owner: string;
+            repo: string;
+            pull_number: number;
+            event: "APPROVE";
+          }) => {
+            if (actionState.reviewError !== null) {
+              throw actionState.reviewError;
+            }
+
+            actionState.reviews.push(input);
+
+            return { data: {} };
+          },
+        ),
+      },
       issues: {
         listComments: vi.fn(async () => ({ data: actionState.existingComments })),
         createComment: vi.fn(async (input: { issue_number: number; body: string }) => {
@@ -101,6 +133,8 @@ afterEach(() => {
   actionState.updatedComments = [];
   actionState.labels = [];
   actionState.removedLabels = [];
+  actionState.reviews = [];
+  actionState.reviewError = null;
 
   if (temporaryDirectory !== "") {
     rmSync(temporaryDirectory, { recursive: true, force: true });
@@ -182,6 +216,7 @@ review_required_rules:
       comments: actionState.comments,
       labels: actionState.labels,
       removedLabels: actionState.removedLabels,
+      reviews: actionState.reviews,
     }).toEqual({
       result: {
         verdict: "HUMAN_REVIEW_REQUIRED",
@@ -256,6 +291,117 @@ review_required_rules:
       ],
       labels: [{ issueNumber: 12, labels: ["review: human-required"] }],
       removedLabels: [{ issueNumber: 12, name: "self-merge: allowed" }],
+      reviews: [],
+    });
+  });
+
+  it("SELF_MERGE_ALLOWEDならコメントとラベルの更新前にPRをApproveする", async () => {
+    prepareAllowedRunMainFixture(78);
+
+    await runMain();
+
+    const actual = JSON.parse(
+      readFileSync(".self-merge-sentinel/result.json", "utf8"),
+    ) as unknown;
+
+    expect({
+      result: actual,
+      outputs: actionState.outputs,
+      comments: actionState.comments,
+      labels: actionState.labels,
+      removedLabels: actionState.removedLabels,
+      reviews: actionState.reviews,
+    }).toEqual({
+      result: {
+        verdict: "SELF_MERGE_ALLOWED",
+        aiVerdict: "SELF_MERGE_ALLOWED",
+        summary: "文言変更のみです。",
+        deterministicMatches: [],
+        aiTriggeredRules: [],
+        rulesSource: { kind: "action-default", path: "rules/default.yml" },
+        filesConsidered: ["src/index.ts"],
+        labelUpdate: {
+          shouldUpdate: true,
+          addLabel: "self-merge: allowed",
+          removeLabel: "review: human-required",
+        },
+        commentUrl: "https://github.example/comment/1",
+      },
+      outputs: [
+        { name: "verdict", value: "SELF_MERGE_ALLOWED" },
+        { name: "comment_url", value: "https://github.example/comment/1" },
+        { name: "result_json", value: JSON.stringify(actual) },
+      ],
+      comments: [
+        {
+          issueNumber: 78,
+          body: `<!-- self-merge-sentinel -->
+
+## セルフマージ判定: セルフマージ可
+
+文言変更のみです。
+
+**判定:** \`SELF_MERGE_ALLOWED\`
+
+<details>
+<summary>判定の詳細</summary>
+
+### Rules設定
+
+- source: \`action-default:rules/default.yml\`
+
+### AI判定
+
+- \`SELF_MERGE_ALLOWED\`
+
+### 考慮したファイル
+
+- \`src/index.ts\`
+
+</details>
+`,
+        },
+      ],
+      labels: [{ issueNumber: 78, labels: ["self-merge: allowed"] }],
+      removedLabels: [{ issueNumber: 78, name: "review: human-required" }],
+      reviews: [
+        {
+          owner: "inakam",
+          repo: "claude-code-actions-self-merge-sentinel",
+          pull_number: 78,
+          event: "APPROVE",
+        },
+      ],
+    });
+  });
+
+  it("PRのApproveに失敗したら後続のGitHub更新とoutput書き出しを行わない", async () => {
+    prepareAllowedRunMainFixture(79);
+    actionState.reviewError = new Error("approval failed");
+    let error: unknown;
+
+    try {
+      await runMain();
+    } catch (caughtError) {
+      error = caughtError;
+    }
+
+    expect({
+      error: error instanceof Error ? error.message : error,
+      resultExists: existsSync(".self-merge-sentinel/result.json"),
+      outputs: actionState.outputs,
+      comments: actionState.comments,
+      labels: actionState.labels,
+      removedLabels: actionState.removedLabels,
+      reviews: actionState.reviews,
+    }).toEqual({
+      error: "approval failed",
+      resultExists: false,
+      outputs: [],
+      comments: [],
+      labels: [],
+      removedLabels: [],
+      reviews: [],
     });
   });
 
@@ -785,6 +931,39 @@ UI文言のみの変更です。
     });
   });
 });
+
+function prepareAllowedRunMainFixture(prNumber: number): void {
+  temporaryDirectory = mkdtempSync(join(tmpdir(), "self-merge-sentinel-main-"));
+  process.chdir(temporaryDirectory);
+  mkdirSync(".self-merge-sentinel");
+  mkdirSync("rules");
+  writeFileSync(
+    ".self-merge-sentinel/metadata.json",
+    JSON.stringify({
+      prNumber,
+      unsupportedFork: false,
+      rulesSource: { kind: "action-default", path: "rules/default.yml" },
+    }),
+  );
+  writeFileSync(".self-merge-sentinel/changed-files.txt", "src/index.ts\n");
+  writeFileSync(
+    ".self-merge-sentinel/ai-result.json",
+    JSON.stringify({
+      verdict: "SELF_MERGE_ALLOWED",
+      summary: "文言変更のみです。",
+      triggered_rules: [],
+      files_considered: ["src/index.ts"],
+    }),
+  );
+  writeFileSync(
+    "rules/default.yml",
+    `version: 1
+description: "迷う場合は人間レビュー必須です。"
+default_verdict: "HUMAN_REVIEW_REQUIRED"
+review_required_rules: []
+`,
+  );
+}
 
 describe("parseChangedFiles", () => {
   const cases = [
