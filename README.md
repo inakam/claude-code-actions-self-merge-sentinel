@@ -8,6 +8,7 @@ PRごとに「セルフマージ可」か「人間レビュー必須」かを判
 
 - **PRごとの判定コメント**: `SELF_MERGE_ALLOWED` または `HUMAN_REVIEW_REQUIRED` を根拠つきでPRに投稿します。
 - **セルフマージ可能なPRを自動Approve**: 最終判定が `SELF_MERGE_ALLOWED` の場合、GitHub Actions bot がPRをApproveします。
+- **Bot actor対応**: Botが作成・更新したPRもセルフマージ判定の対象にします。
 - **ラベル更新**: `self-merge: allowed` または `review: human-required` を最新判定に合わせて更新します。
 - **rules-only 設定**: `rules/default.yml`、利用先リポジトリの `rules_path`、追加の `extra_rules_paths` を判定ソースにします。
 - **決定的ルール優先**: `match.paths` に一致した変更はAI判断に関係なく人間レビュー必須にします。
@@ -403,6 +404,7 @@ steps:
 - Claude には `Read` だけを許可し、読み取り対象は変更ファイル一覧と diff に限定します。
 - Claude にはApprove、コメント投稿、ラベル更新をさせません。
 - PRのApprove、コメント、ラベル更新は、同梱された action script が GitHub API で実行します。
+- 内部の Claude Code Action には `allowed_bots: '*'` を渡し、すべてのBot actorを許可します。公開リポジトリでは外部GitHub Appが作成・更新したPRでもActionが起動し、AI APIを消費する可能性があります。
 - workflow の `permissions` は `contents: read`, `pull-requests: write`, `issues: write` に絞ってください。
 
 ## リリース
