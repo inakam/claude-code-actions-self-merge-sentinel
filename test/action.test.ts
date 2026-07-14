@@ -30,6 +30,7 @@ describe("action.yml", () => {
     const actual = {
       inputs: {
         anthropic_api_key: action.inputs.anthropic_api_key,
+        github_token: action.inputs.github_token,
         use_bedrock: action.inputs.use_bedrock,
         use_vertex: action.inputs.use_vertex,
         base_url: action.inputs.base_url,
@@ -53,6 +54,10 @@ describe("action.yml", () => {
           description: "Claude Code Action compatible API key",
           required: false,
           default: "",
+        },
+        github_token: {
+          description: "GitHub token for PR diff, reviews, comments, and labels",
+          required: true,
         },
         use_bedrock: {
           description:

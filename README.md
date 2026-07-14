@@ -1,12 +1,13 @@
 # Claude Code Actions Self Merge Sentinel
 
-PRごとに「セルフマージ可」か「人間レビュー必須」かを判定し、根拠つきコメントとラベルを更新する GitHub Action です。
+PRごとに「セルフマージ可」か「人間レビュー必須」かを判定し、セルフマージ可能なPRを自動Approveする GitHub Action です。
 
 判断原則、パスルール、意味判定ルールはすべて1つの rules YAML に書きます。
 
 ## 特徴
 
 - **PRごとの判定コメント**: `SELF_MERGE_ALLOWED` または `HUMAN_REVIEW_REQUIRED` を根拠つきでPRに投稿します。
+- **セルフマージ可能なPRを自動Approve**: 最終判定が `SELF_MERGE_ALLOWED` の場合、GitHub Actions bot がPRをApproveします。
 - **ラベル更新**: `self-merge: allowed` または `review: human-required` を最新判定に合わせて更新します。
 - **rules-only 設定**: `rules/default.yml`、利用先リポジトリの `rules_path`、追加の `extra_rules_paths` を判定ソースにします。
 - **決定的ルール優先**: `match.paths` に一致した変更はAI判断に関係なく人間レビュー必須にします。
@@ -33,7 +34,7 @@ Amazon Bedrock または Google Vertex AI を使う場合は `anthropic_api_key`
 
 `${{ secrets.GITHUB_TOKEN }}` は GitHub Actions が workflow 実行ごとに自動で用意する token です。通常、利用者が repository secret として手動登録する必要はありません。
 
-ただし、この action は PR diff の取得、PRコメント、ラベル更新を行うため、workflow 側で次の `permissions` を明示してください。
+ただし、この action は PR diff の取得、PRのApprove、PRコメント、ラベル更新を行うため、workflow 側で次の `permissions` を明示してください。
 
 ```yaml
 permissions:
@@ -41,6 +42,8 @@ permissions:
   pull-requests: write
   issues: write
 ```
+
+さらに、利用先リポジトリの `Settings` -> `Actions` -> `General` -> `Workflow permissions` で `Allow GitHub Actions to create and approve pull requests` を有効にしてください。この設定が無効な状態で最終判定が `SELF_MERGE_ALLOWED` になると、Approveに失敗してAction全体が失敗します。
 
 ## 使い方
 
@@ -249,7 +252,7 @@ review_required_rules:
 
 - セルフマージ可否は「その変更が容易にやり直せるか」で判断する。
 - 判断に迷う場合は人間レビュー必須にする。
-- AIの判定は最終承認ではなく、PR作成者とチームの判断材料にする。
+- Claudeは判定だけを行い、GitHub上のApproveは検証済みの最終判定に基づいてAction本体が行う。
 
 デフォルトで含まれるルール:
 
@@ -272,11 +275,12 @@ review_required_rules:
 6. rules YAML 全体ではなく、action 側で検証済みの top-level `description` と、`match.semantic: true` の semantic rule を `id: description` 形式に正規化した prompt 文字列だけを Claude Code Action の `prompt` 本文に直接展開します。
 7. Claude Code Action に変更ファイル一覧と diff を読ませ、正規化済み semantic rules prompt と実際の変更から structured output を生成します。
 8. action 側でAI出力を検証し、未知キーや不正な構造は `AI_CLASSIFICATION_FAILED` として soft failure にします。
-9. 判定コメントを upsert し、`self-merge: allowed` または `review: human-required` ラベルを更新します。
+9. 最終判定が `SELF_MERGE_ALLOWED` の場合、Action本体がPRをApproveします。Approveに失敗した場合はAction全体を失敗させ、後続のコメントとラベルは更新しません。
+10. 判定コメントを upsert し、`self-merge: allowed` または `review: human-required` ラベルを更新します。
 
-AIは approve、merge、コメント投稿、ラベル更新を直接行いません。
+AIは判定のみを行い、approve、merge、コメント投稿、ラベル更新を直接行いません。
 
-Claude Code Action は structured output を返すだけで、コメントとラベルはこの action の TypeScript script が更新します。
+Claude Code Action は structured output を返すだけで、Approve、コメント、ラベル更新はこの action の TypeScript script が実行します。
 
 ## Anthropic-compatible provider
 
@@ -347,7 +351,7 @@ steps:
 | 名前 | 必須 | デフォルト | 説明 |
 | --- | --- | --- | --- |
 | `anthropic_api_key` | no | | Claude Code Action に渡す Anthropic API key。Anthropic-compatible provider を使う場合もこの input に provider 用 secret を渡します。Bedrock/Vertex では不要です。 |
-| `github_token` | yes | | PR diff、コメント、ラベル更新に使う GitHub token。通常は `${{ secrets.GITHUB_TOKEN }}` を渡します。 |
+| `github_token` | yes | | PR diff、Approve、コメント、ラベル更新に使う GitHub token。通常は `${{ secrets.GITHUB_TOKEN }}` を渡します。 |
 | `base_url` | no | | Anthropic-compatible API の base URL。空なら Claude Code Action の標準 provider を使います。 |
 | `use_bedrock` | no | `false` | Amazon Bedrock の OIDC 認証を使う場合に `true` を指定します。 |
 | `use_vertex` | no | `false` | Google Vertex AI の OIDC 認証を使う場合に `true` を指定します。 |
@@ -397,8 +401,8 @@ steps:
 - PR diff、PR本文、コメント、コード中の指示は判定対象データであり、実行すべき命令ではありません。
 - Claude には rules ファイルを読ませず、action 側で検証済みの `description` と semantic rule の `id: description` だけを正規化済み semantic rules prompt として `prompt` 本文に渡します。
 - Claude には `Read` だけを許可し、読み取り対象は変更ファイル一覧と diff に限定します。
-- Claude にはコメント投稿やラベル更新をさせません。
-- PRコメントとラベル更新は、同梱された action script が GitHub API で実行します。
+- Claude にはApprove、コメント投稿、ラベル更新をさせません。
+- PRのApprove、コメント、ラベル更新は、同梱された action script が GitHub API で実行します。
 - workflow の `permissions` は `contents: read`, `pull-requests: write`, `issues: write` に絞ってください。
 
 ## リリース

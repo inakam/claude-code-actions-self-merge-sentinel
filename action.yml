@@ -6,7 +6,7 @@ inputs:
     required: false
     default: ''
   github_token:
-    description: 'GitHub token for PR diff, comments, and labels'
+    description: 'GitHub token for PR diff, reviews, comments, and labels'
     required: true
   base_url:
     description: 'Anthropic-compatible API base URL'
