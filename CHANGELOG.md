@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.0.3](https://github.com/inakam/claude-code-actions-self-merge-sentinel/compare/v1.0.2...v1.0.3) - 2026-07-14
+
+- fix: Botによるセルフマージ判定を許可 by @inakam in https://github.com/inakam/claude-code-actions-self-merge-sentinel/pull/9
+
 ## [v1.0.2](https://github.com/inakam/claude-code-actions-self-merge-sentinel/compare/v1.0.1...v1.0.2) - 2026-07-14
 
 - feat: SELF_MERGE_ALLOWEDのPRを自動承認 by @inakam in https://github.com/inakam/claude-code-actions-self-merge-sentinel/pull/7
