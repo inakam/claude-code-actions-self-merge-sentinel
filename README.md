@@ -276,7 +276,7 @@ review_required_rules:
 6. rules YAML 全体ではなく、action 側で検証済みの top-level `description` と、`match.semantic: true` の semantic rule を `id: description` 形式に正規化した prompt 文字列だけを Claude Code Action の `prompt` 本文に直接展開します。
 7. Claude Code Action に変更ファイル一覧と diff を読ませ、正規化済み semantic rules prompt と実際の変更から structured output を生成します。
 8. action 側でAI出力を検証し、未知キーや不正な構造は `AI_CLASSIFICATION_FAILED` として soft failure にします。
-9. 最終判定が `SELF_MERGE_ALLOWED` の場合、Action本体がPRをApproveします。Approveに失敗した場合はAction全体を失敗させ、後続のコメントとラベルは更新しません。
+9. 最終判定が `SELF_MERGE_ALLOWED` の場合、Action本体がPRをApproveします（`approve: false` の場合は行いません）。Approveに失敗した場合はAction全体を失敗させ、後続のコメントとラベルは更新しません。
 10. 判定コメントを upsert し、`self-merge: allowed` または `review: human-required` ラベルを更新します。
 
 AIは判定のみを行い、approve、merge、コメント投稿、ラベル更新を直接行いません。
@@ -361,6 +361,7 @@ steps:
 | `api_timeout_ms` | no | | API timeout milliseconds。必要な provider でだけ指定します。 |
 | `rules_path` | no | | 利用先リポジトリに置いた rules YAML のパス。未指定なら同梱の `rules/default.yml` を使います。 |
 | `extra_rules_paths` | no | | ベース rules に追加する rules YAML のパス一覧。改行区切りで指定します。 |
+| `approve` | no | `true` | 最終判定が `SELF_MERGE_ALLOWED` のときに PR を Approve するか。`false` にするとコメントとラベルの更新だけを行います。別のレビュー bot が Approve する場合など、Approve を重複させたくないときに使います。 |
 | `allowed_label` | no | `self-merge: allowed` | セルフマージ可 PR に付けるラベル。 |
 | `human_required_label` | no | `review: human-required` | 人間レビュー必須 PR に付けるラベル。 |
 | `comment_marker` | no | `<!-- self-merge-sentinel -->` | PRコメントを更新するための marker。 |

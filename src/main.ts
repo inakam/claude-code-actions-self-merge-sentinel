@@ -57,7 +57,9 @@ export async function runMain(): Promise<void> {
     ? skippedForkResult(metadata)
     : buildFinalResult({ metadata, labels });
 
-  if (result.verdict === "SELF_MERGE_ALLOWED") {
+  const approveEnabled = core.getInput("approve") !== "false";
+
+  if (approveEnabled && result.verdict === "SELF_MERGE_ALLOWED") {
     await approvePullRequest({
       token,
       owner: github.context.repo.owner,
