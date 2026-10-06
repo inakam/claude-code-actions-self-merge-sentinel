@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.0.4](https://github.com/inakam/claude-code-actions-self-merge-sentinel/compare/v1.0.3...v1.0.4) - 2026-10-06
+
+- feat: add approve input to disable approval on SELF_MERGE_ALLOWED by @hiro-o918 in https://github.com/inakam/claude-code-actions-self-merge-sentinel/pull/11
+
 ## [v1.0.3](https://github.com/inakam/claude-code-actions-self-merge-sentinel/compare/v1.0.2...v1.0.3) - 2026-07-14
 
 - fix: Botによるセルフマージ判定を許可 by @inakam in https://github.com/inakam/claude-code-actions-self-merge-sentinel/pull/9
