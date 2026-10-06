@@ -28876,7 +28876,8 @@ async function runMain() {
     humanRequired: core2.getInput("human_required_label") || defaultLabels.humanRequired
   };
   const result = metadata.unsupportedFork ? skippedForkResult(metadata) : buildFinalResult({ metadata, labels });
-  if (result.verdict === "SELF_MERGE_ALLOWED") {
+  const approveEnabled = core2.getInput("approve") !== "false";
+  if (approveEnabled && result.verdict === "SELF_MERGE_ALLOWED") {
     await approvePullRequest({
       token,
       owner: github2.context.repo.owner,

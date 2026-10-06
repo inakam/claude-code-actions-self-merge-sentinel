@@ -30,6 +30,7 @@ const actionState = vi.hoisted(() => ({
     event: "APPROVE";
   }[],
   reviewError: null as Error | null,
+  inputOverrides: {} as Record<string, string>,
 }));
 
 vi.mock("@actions/core", () => ({
@@ -41,7 +42,7 @@ vi.mock("@actions/core", () => ({
       human_required_label: "review: human-required",
     };
 
-    return inputs[name] ?? "";
+    return actionState.inputOverrides[name] ?? inputs[name] ?? "";
   }),
   setOutput: vi.fn((name: string, value: string) => {
     actionState.outputs.push({ name, value });
@@ -135,6 +136,7 @@ afterEach(() => {
   actionState.removedLabels = [];
   actionState.reviews = [];
   actionState.reviewError = null;
+  actionState.inputOverrides = {};
 
   if (temporaryDirectory !== "") {
     rmSync(temporaryDirectory, { recursive: true, force: true });
@@ -372,6 +374,26 @@ review_required_rules:
           event: "APPROVE",
         },
       ],
+    });
+  });
+
+  it("approveがfalseならSELF_MERGE_ALLOWEDでもApproveせずにコメントとラベルを更新する", async () => {
+    // NOTE: コメント本文は「SELF_MERGE_ALLOWEDならコメントとラベルの更新前にPRをApproveする」と同一のため、投稿先のPR番号のみ比較
+    prepareAllowedRunMainFixture(80);
+    actionState.inputOverrides = { approve: "false" };
+
+    await runMain();
+
+    expect({
+      comments: actionState.comments.map((comment) => comment.issueNumber),
+      labels: actionState.labels,
+      removedLabels: actionState.removedLabels,
+      reviews: actionState.reviews,
+    }).toEqual({
+      comments: [80],
+      labels: [{ issueNumber: 80, labels: ["self-merge: allowed"] }],
+      removedLabels: [{ issueNumber: 80, name: "review: human-required" }],
+      reviews: [],
     });
   });
 

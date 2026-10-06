@@ -40,6 +40,10 @@ inputs:
     description: 'Additional repository rules YAML paths, separated by newlines'
     required: false
     default: ''
+  approve:
+    description: 'Approve the PR when the final verdict is SELF_MERGE_ALLOWED. Set to "false" to only post the comment and labels.'
+    required: false
+    default: 'true'
   allowed_label:
     description: 'Label for self-merge allowed PRs'
     required: false
@@ -175,4 +179,5 @@ runs:
         INPUT_ALLOWED_LABEL: ${{ inputs.allowed_label }}
         INPUT_HUMAN_REQUIRED_LABEL: ${{ inputs.human_required_label }}
         INPUT_COMMENT_MARKER: ${{ inputs.comment_marker }}
+        INPUT_APPROVE: ${{ inputs.approve }}
       run: node "${{ github.action_path }}/dist/main.cjs"
